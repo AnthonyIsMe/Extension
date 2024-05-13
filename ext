@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Twitch Extension</title>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css"
+    />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #121212; /* Dark background color */
+        color: #fff; /* Light text color */
+      }
+
+      #tabs {
+        text-align: center;
+        background-color: #333; /* Darker background color */
+        padding: 10px;
+      }
+
+      .tab-button {
+        cursor: pointer;
+        margin: 0 10px;
+        padding: 20px 40px;
+        background-color: #444;
+        border: none;
+        border-radius: 5px;
+        color: #fff;
+      }
+
+      .tab-button.active {
+        background-color: aqua;
+      }
+
+      #searchContainer {
+        background-color: #333; /* Darker background color */
+        padding: 10px;
+        text-align: center;
+      }
+
+      #searchInput {
+        width: 90%;
+        padding: 24px;
+        border: 1px solid #555; /* Darker border color */
+        border-radius: 69px;
+        box-sizing: border-box;
+        background-color: #444; /* Darker input background color */
+        color: #fff; /* Light text color */
+        text-align: center;
+        font-size: 24px;
+      }
+
+      #tableContainer {
+        margin-top: 20px;
+        padding: 0 10px;
+        overflow-x: auto;
+      }
+
+      #queueContainer {
+        display: none; /* Initially hidden */
+        margin-top: 20px;
+        padding: 0 10px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
+      }
+
+      th {
+        background-color: aqua;
+      }
+
+      td {
+        background-color: rgb(37, 37, 37);
+      }
+
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border: 2px solid #555; /* Darker border color */
+        color: #f9f9f9;
+      }
+
+      tr:nth-child(even) {
+        background-color: #333; /* Darker background color */
+      }
+
+      /* Popup styles */
+      .popup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        padding: 20px;
+        border-radius: 5px;
+        color: #fff;
+        display: none;
+      }
+
+      @media only screen and (max-width: 600px) {
+        /* Styles for screens smaller than 600px (typical mobile devices) */
+        th:nth-child(n + 3),
+      /* Hide columns starting from the 3rd column (Album) */
+      td:nth-child(n + 3) {
+          display: none; /* Hide the columns */
+        }
+        /* Styles for screens smaller than 600px (typical mobile devices) */
+        #searchInput {
+          width: 100%;
+        }
+        th,
+        td {
+          padding: 8px; /* Adjusted padding for smaller screens */
+          font-size: 25px; /* Reduced font size for better readability */
+          /* Prevent text wrapping */
+          overflow: hidden; /* Hide overflow */
+          text-overflow: ellipsis; /* Display ellipsis for overflow text */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="tabs">
+      <button class="tab-button active" id="songsTab">Songs</button>
+      <button class="tab-button" id="queueTab">Queue</button>
+    </div>
+
+    <!-- Search bar -->
+    <div id="searchContainer">
+      <input type="text" id="searchInput" placeholder="Search..." />
+    </div>
+
+    <div id="tableContainer">
+      <table id="songsTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Artist</th>
+            <th>Album</th>
+            <th>Genre</th>
+            <th>Charter</th>
+            <th>Year</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Table body will be populated dynamically using JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+    <div id="queueContainer">
+      <!-- Queue content will be dynamically added using JavaScript -->
+    </div>
+
+    <!-- Popup message -->
+    <div id="popup" class="popup"></div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.24/js/jquery.dataTables.js"></script>
+    <script>
+      var table;
+      var queue = []; // Array to store queued songs
+
+      $(document).ready(function () {
+        // Load Data from JSON
+        $.getJSON("songs.json", function (data) {
+          table = $("#songsTable").DataTable({
+            lengthMenu: [
+              [50, 100, 150, -1],
+              [50, 100, 150, "All"],
+            ],
+            dom: 'l<"top">rt<"bottom"ip<"clear">>', // Remove 'l' from the dom option
+          });
+          $.each(data, function (index, value) {
+            // Add rows using DataTables API
+            table.row
+              .add([
+                value.Name,
+                value.Artist,
+                value.Album,
+                value.Genre,
+                value.Charter,
+                value.Year,
+              ])
+              .draw();
+          });
+        });
+
+        // Search functionality
+        $("#searchInput").on("keyup", function () {
+          table.search(this.value).draw();
+        });
+
+        // Tab functionality
+        $(".tab-button").click(function () {
+          $(".tab-button").removeClass("active");
+          $(this).addClass("active");
+
+          if ($(this).attr("id") === "songsTab") {
+            $("#tableContainer").show();
+            $("#queueContainer").hide();
+          } else if ($(this).attr("id") === "queueTab") {
+            $("#tableContainer").hide();
+            $("#queueContainer").show();
+            displayQueue();
+          }
+        });
+
+        // Add click event listener to table rows
+        $("#songsTable tbody").on("click", "tr", function () {
+          var rowData = table.row(this).data(); // Get data of clicked row
+          var name = rowData[0]; // Name is the first column
+          var artist = rowData[1]; // Artist is the second column
+          queue.push({ name: name, artist: artist }); // Add to queue
+          displayQueue(); // Update queue display
+          showPopup("Song has been added to the queue!");
+        });
+
+        // Function to display queue
+        function displayQueue() {
+          var queueHTML = "";
+          $.each(queue, function (index, song) {
+            queueHTML += "<div>" + song.name + " - " + song.artist + "</div>";
+          });
+          $("#queueContainer").html(queueHTML);
+        }
+
+        // Function to show popup message
+        function showPopup(message) {
+          $("#popup").text(message).fadeIn(300).delay(2000).fadeOut(400);
+        }
+      });
+    </script>
+  </body>
+</html>
